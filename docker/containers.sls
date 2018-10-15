@@ -25,7 +25,8 @@ docker-image-{{ name }}-retry:
       - cmd: docker-image-{{ name }}
 
 {# TODO: SysV init script #}
-{%- set init_system = salt["cmd.run"]("bash -c 'ps -p1 | grep -q systemd && echo systemd || echo upstart'") %}
+{# Use grains instead of command to get init system #}
+{%- set init_system = grains['init'] %}
 
 docker-container-startup-config-{{ name }}:
   file.managed:
@@ -34,11 +35,10 @@ docker-container-startup-config-{{ name }}:
     - source: salt://docker/files/systemd_processor.conf
 {%- elif init_system == "systemd" %}
     - name: /etc/systemd/system/docker-{{ name }}.service
-    - source: salt://docker/files/systemd.conf
 {%- elif init_system == "upstart" %}
     - name: /etc/init/docker-{{ name }}.conf
-    - source: salt://docker/files/upstart.conf
 {%- endif %}
+    - source: salt://docker/files/service_file.jinja
     - mode: 700
     - user: root
     - template: jinja

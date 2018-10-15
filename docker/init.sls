@@ -1,11 +1,14 @@
 {% from "docker/map.jinja" import docker with context %}
-{% if docker.kernel is defined %}
+
+{% set docker_pkg_name = docker.pkg.old_name if docker.use_old_repo else docker.pkg.name %}
+{% set docker_pkg_version = docker.version | default(docker.pkg.version) %}
 include:
   - .kernel
-{% endif %}
+  - .repo
 
 {%- set init_system = salt["cmd.run"]("bash -c 'ps -p1 | grep -q systemd && echo systemd || echo upstart'") %}
 {%- set docker_ssd = salt["cmd.run"]("bash -c '(lsblk | grep -o nvme1n1) || (lsblk | grep -o xvdb)'") %}
+
 
 docker package dependencies:
   pkg.installed:
@@ -16,108 +19,35 @@ docker package dependencies:
       {%- endif %}
       - iptables
       - ca-certificates
-
-{%- if grains['os_family']|lower == 'debian' %}
-{%- if grains["oscodename"]|lower == 'jessie' and "version" not in docker%}
-docker package repository:
-  pkgrepo.managed:
-    - name: deb http://http.debian.net/debian jessie-backports main
-{%- else %}
-  {%- if "version" in docker %}
-    {%- if (docker.version|string).startswith('1.7.') %}
-      {%- set use_old_repo = docker.version < '1.7.1' %}
-    {%- else %}
-      {%- set version_major = (docker.version|string).split('.')[0]|int %}
-      {%- set version_minor = (docker.version|string).split('.')[1]|int %}
-      {%- set old_repo_major = 1 %}
-      {%- set old_repo_minor = 7 %}
-      {%- set use_old_repo = (version_major < old_repo_major or (version_major == old_repo_major and version_minor < old_repo_minor)) %}
-    {%- endif %}
-  {%- endif %}
-
-{%- if "version" in docker and use_old_repo %}
-docker package repository:
-  pkgrepo.managed:
-    - name: deb https://get.docker.com/ubuntu docker main
-    - humanname: Old Docker Package Repository
-    - keyid: d8576a8ba88d21e9
-{%- else %}
-purge old packages:
-  pkgrepo.absent:
-    - name: deb https://get.docker.com/ubuntu docker main
-  pkg.purged:
-    - pkgs: 
-      - lxc-docker*
-      - docker.io*
-    - require_in:
-      - pkgrepo: docker package repository
-
-docker package repository:
-  pkgrepo.managed:
-    - name: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ grains["oscodename"] }} stable
-    - humanname: {{ grains["os"] }} {{ grains["oscodename"]|capitalize }} Docker Package Repository
-    - keyid: 7EA0A9C3F273FCD8
-{%- endif %}
-    - keyserver: hkp://p80.pool.sks-keyservers.net:80
-    - file: /etc/apt/sources.list.d/docker.list
-    - refresh_db: True
-{%- endif %}
-
-{%- elif grains['os_family']|lower == 'redhat' and grains['os']|lower != 'amazon' %}
-docker package repository:
-  pkgrepo.managed:
-    - name: docker
-    - baseurl: https://yum.dockerproject.org/repo/main/centos/$releasever/
-    - gpgcheck: 1
-    - gpgkey: https://yum.dockerproject.org/gpg
-    - require_in:
-      - pkg: docker package
-    - require:
-      - pkg: docker package dependencies
-{%- endif %}
+      {% if docker.kernel.pkgs is defined %}
+        {% for pkg in docker.kernel.pkgs %}
+        - {{ pkg }}
+        {% endfor %}
+      {% endif %}
+    - unless: test "`uname`" = "Darwin"
 
 docker package:
-  {%- if "version" in docker %}
   pkg.installed:
-    {%- if grains["oscodename"]|lower == 'jessie' and "version" not in docker %}
-    - name: docker.io
-    - version: {{ docker.version }}
-    {%- elif use_old_repo %}
-    - name: lxc-docker-{{ docker.version }}
-    {%- else %}
-    {%- if grains['os']|lower == 'amazon' %}
-    - name: docker
-    {%- else %}
-    - name: docker-ce
-    {%- endif %}
-    - version: {{ docker.version }}
-    {%- endif %}
-    - hold: True
-  {%- else %}
-  pkg.latest:
-    {%- if grains["oscodename"]|lower == 'jessie' and "version" not in docker %}
-    - name: docker.io
-    {%- else %}
-    {%- if grains['os']|lower == 'amazon' %}
-    - name: docker
-    {%- else %}
-    - name: docker-ce
-    {%- endif %}
-    {%- endif %}
-  {%- endif %}
+    - name: {{ docker_pkg_name }}
+    - version: {{ docker_pkg_version }}
     - refresh: {{ docker.refresh_repo }}
     - require:
       - pkg: docker package dependencies
-      {%- if grains['os']|lower != 'amazon' %}
+      {%- if grains['os']|lower not in ('amazon', 'fedora', 'suse',) %}
       - pkgrepo: docker package repository
       {%- endif %}
-      - file: docker-config
-
+    - refresh: {{ docker.refresh_repo }}
+    - require:
+      - pkg: docker package dependencies
+      {%- if grains['os']|lower not in ('amazon', 'fedora', 'suse',) %}
+      - pkgrepo: docker package repository
+      {%- endif %}
+    - require_in:
 
 docker-config:
 {%- if init_system == "upstart" %}
   file.managed:
-    - name: /etc/default/docker
+    - name: {{ docker.configfile }}
     - source: salt://docker/files/config
     - template: jinja
     - mode: 644
@@ -248,18 +178,10 @@ docker-service:
     - sig: {{ docker.process_signature }}
     {% endif %}
 
-
 {% if docker.install_docker_py %}
 docker-py requirements:
   pkg.installed:
-    - name: {{ docker.python_pip_package }}
-  pip.installed:
-    {%- if "pip" in docker and "version" in docker.pip %}
-    - name: pip {{ docker.pip.version }}
-    {%- else %}
-    - name: pip
-    - upgrade: True
-    {%- endif %}
+    - name: {{ docker.pip.pkgname }}
 
 docker-py:
   pip.installed:
@@ -271,4 +193,7 @@ docker-py:
     - name: docker-py
     {%- endif %}
     - reload_modules: true
+    {%- if docker.proxy %}
+    - proxy: {{ docker.proxy }}
+    {%- endif %}
 {% endif %}

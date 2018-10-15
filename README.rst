@@ -51,6 +51,9 @@ To use it, just include *docker.containers* in your *top.sls*, and configure it 
           - "--rm"
       myapp:
         image: "myregistry.com:5000/training/app:3.0"
+	args:
+          - "https://someargument_as_an_url"
+          - "--port 5500"
         cmd:  python app.py
         runoptions:
           - "--log-driver=syslog"
@@ -67,13 +70,18 @@ In the example pillar above:
 - Upstart files are created for each container, so ``service <container_name> stop|start|status`` should just work
 - ``service <container_name> stop`` will wipeout the container completely (ie ``docker stop <container_name> + docker rm <container_name>``)
 
+``docker.repo``
+---------------
+
+Configures the upstream docker's repo (true, by default).
+
 
 ``docker.compose``
 ------------------
 
-Add support for using `Docker Compose <https://docs.docker.com/compose/>`_
+Installs `Docker Compose <https://docs.docker.com/compose/>`_
 (previously ``fig``) to define groups of containers and their relationships
-with one another.
+with one another. Use `docker.compose-ng` to run `docker-compose`.
 
 ``docker.compose-ng``
 ---------------------
@@ -178,6 +186,16 @@ In this case, extra *docker run* options can be provided in your *"registry:look
 
 By default, the storage backend used by the registry is "filesystem". Use environment variables to override that, for example to use S3 as backend storage.
 
+``docker.remove``
+----------------
+
+Stop Docker daemon. Remove older docker packages (usually called 'docker' and 'docker-engine').
+
+Development
+===========
+
+Note that some of the internal states such as `docker.running` are references to the internal `dockerio states <https://docs.saltstack.com/en/latest/ref/states/all/salt.states.dockerio.html>`
+
 
 Testing
 =======
@@ -198,4 +216,3 @@ Requirements
     gem install bundler
     bundle install
     kitchen test
-
