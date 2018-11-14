@@ -3,6 +3,10 @@
 include:
   - docker
 
+ecr-login:
+  cmd.run:
+    - name: $(aws ecr get-login --no-include-email --region us-east-1)
+
 docker-pull-script:
   file.managed:
     - name: /root/docker-pull.sh
@@ -17,6 +21,7 @@ docker-image-{{ name }}:
     - require:
       - service: docker-service
       - file: docker-pull-script
+      - cmd: ecr-login
 
 docker-image-{{ name }}-retry:
   cmd.run:
