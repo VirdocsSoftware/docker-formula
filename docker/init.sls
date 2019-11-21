@@ -160,7 +160,6 @@ docker-config:
 {%- endif %}      
 
 {%- if init_system == "systemd" and grains['project'] != "jenkins" and grains['roles'] != "slave" %}
-{%- if  == "xvdb" %}
 pvcreate:
   cmd.run:
     - name: pvcreate /dev/{{ docker_ssd }}
