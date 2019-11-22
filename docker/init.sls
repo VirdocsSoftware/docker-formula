@@ -5,7 +5,7 @@ include:
 {% endif %}
 
 {%- set init_system = salt["cmd.run"]("bash -c 'ps -p1 | grep -q systemd && echo systemd || echo upstart'") %}
-{%- set docker_ssd = salt["cmd.run"]("bash -c \"lsblk --raw -d | tail -1 | cut -f 1 -d ' '\"") %}
+{%- set docker_ssd = salt["cmd.run"]("bash -c \"lsblk --raw -d | grep -v SWAP | tail -1 | cut -f 1 -d ' '\"") %}
 
 docker package dependencies:
   pkg.installed:
@@ -123,15 +123,7 @@ docker-config:
     - mode: 644
     - user: root
     - makedirs: True
-{%- elif grains['project'] == "jenkins" and grains['roles'] == "slave" %}
-  file.managed:
-    - name: /etc/docker/daemon.json
-    - source: salt://docker/files/daemon_jenkins.json
-    - template: jinja
-    - mode: 644
-    - user: root
-    - makedirs: True
-{%- elif init_system == "systemd" and grains['project'] != "jenkins" and grains['roles'] != "slave" %}
+{%- elif init_system == "systemd" %}
   file.managed:
     - name: /etc/docker/daemon.json
     - source: salt://docker/files/daemon_devicemapper.json
@@ -159,7 +151,7 @@ docker-config:
     - makedirs: True
 {%- endif %}      
 
-{%- if init_system == "systemd" and grains['project'] != "jenkins" and grains['roles'] != "slave" %}
+{%- if init_system == "systemd" %}
 pvcreate:
   cmd.run:
     - name: pvcreate /dev/{{ docker_ssd }}
