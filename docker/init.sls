@@ -5,7 +5,7 @@ include:
 {% endif %}
 
 {%- set init_system = salt["cmd.run"]("bash -c 'ps -p1 | grep -q systemd && echo systemd || echo upstart'") %}
-{%- set docker_ssd = salt["cmd.run"]("bash -c \"lsblk --raw -d | grep -v SWAP | grep -v $(blkid | grep cloud | cut -d '/' -f3 | cut -d ':' -f1 | cut -d 'p' -f1 | head -n 1) | tail -1 | cut -f 1 -d ' '\"") %}
+{%- set docker_ssd = salt["cmd.run"]("bash -c \"lsblk --raw -d | grep -v SWAP | grep -v loop | grep -v $(blkid | grep cloud | cut -d '/' -f3 | cut -d ':' -f1 | cut -d 'p' -f1 | head -n 1) | tail -1 | cut -f 1 -d ' '\"") %}
 
 docker package dependencies:
   pkg.installed:
